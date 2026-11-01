@@ -1,6 +1,25 @@
 import { lib, game, Game, ui, get, ai, _status } from "noname";
 import { showYexingsContent, chooseCharacterContent, chooseCharacterOLContent } from "./content.js";
 
+/** 仅为国战创建录像处理表，不修改通用处理表。 */
+export function createGuozhanVideoContent(base) {
+	return {
+		...base,
+		init(players) {
+			base.init.call(this, players);
+			for (const [index, player] of game.players.entries()) {
+				player.guozhanSeat = players[index].guozhanSeat ?? Number(/^unknown(\d+)$/.exec(players[index].name)?.[1]);
+			}
+		},
+		reinit3(source, content) {
+			if (source && content && !content.avatar2) {
+				source.name1 = content.to;
+			}
+			return base.reinit3.call(this, source, content);
+		},
+	};
+}
+
 const withoutGouniResultEffect = callback => {
 	const old = _status.gz_gouni_checkingResult;
 	_status.gz_gouni_checkingResult = true;
@@ -154,14 +173,15 @@ export class GameGuozhan extends Game {
 	/**
 	 * 联机时获取当前玩家的信息
 	 *
-	 * @returns {Record<string, { identity: string, shown?: number }>} - 玩家信息的对象
+	 * @returns {Record<string, { identity: string, shown?: number, guozhanSeat?: number }>} - 玩家信息的对象
 	 */
 	getState() {
-		/** @type {Record<string, { identity: string, shown?: number }>} */
+		/** @type {Record<string, { identity: string, shown?: number, guozhanSeat?: number }>} */
 		const state = {};
 		for (const playerId in lib.playerOL) {
 			var player = lib.playerOL[playerId];
 			state[playerId] = {
+				guozhanSeat: player.getGuozhanSeat(),
 				identity: player.identity,
 				//group:player.group,
 				shown: player.ai.shown,
@@ -173,12 +193,15 @@ export class GameGuozhan extends Game {
 	/**
 	 * 联机时更新玩家信息
 	 *
-	 * @param {Record<string, { identity: string, shown?: number }>} state - 玩家信息的对象
+	 * @param {Record<string, { identity: string, shown?: number, guozhanSeat?: number }>} state - 玩家信息的对象
 	 */
 	updateState(state) {
 		for (const playerId in state) {
 			const player = lib.playerOL[playerId];
 			if (player) {
+				if (Number.isInteger(state[playerId].guozhanSeat)) {
+					player.guozhanSeat = state[playerId].guozhanSeat;
+				}
 				player.identity = state[playerId].identity;
 				//player.group=state[i].group;
 				player.ai.shown = state[playerId].shown;

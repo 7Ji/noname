@@ -3,7 +3,85 @@
 import { lib, game, ui, get, Get, ai, _status } from "noname";
 import { showYexingsContent, chooseCharacterContent, chooseCharacterOLContent } from "./content.js";
 
+// 模式补丁可能直接覆盖原型，提前保存基础翻译以避免递归调用自身。
+const baseTranslation = Get.prototype.translation;
+const baseNodeIntro = Get.prototype.nodeintro;
+const baseCardsetion = Get.prototype.cardsetion;
+
 export class GetGuozhan extends Get {
+	cardsetion(player, sourceEvent) {
+		const result = baseCardsetion.call(this, player, sourceEvent);
+		if (typeof result !== "string") {
+			return result;
+		}
+		const separator = '<br/><span style="color:#FFD700">';
+		const index = result.indexOf(separator);
+		return index < 0 ? result : (player || game.me).getName(true) + result.slice(index + separator.length);
+	}
+
+	nodeintro(node, simple, evt, uiintro) {
+		const result = baseNodeIntro.call(this, node, simple, evt, uiintro);
+		const player = node.linkplayer ? node.link : node;
+		if (!result || node._customintro || player._nointro || get.itemtype(player) !== "player" || !player.name) {
+			return result;
+		}
+		// 只调整本次国战角色对话框，不覆盖通用渲染方法或翻译武将ID。
+		const caption = result.content.firstElementChild;
+		const originalName = get.translation(player.name);
+		if (caption?.classList.contains("caption") && caption.innerHTML.startsWith(originalName)) {
+			caption.innerHTML = get.translation(player) + caption.innerHTML.slice(originalName.length);
+		}
+		if (simple && !get.is.phoneLayout()) {
+			return result;
+		}
+		const oldEntry = Array.from(result.content.children).find(entry => entry.classList.contains("text") && entry.innerHTML === "查看资料");
+		const anchor = oldEntry || result.content.lastElementChild;
+		let viewInfos;
+		for (const index of [0, 1]) {
+			const nameKey = index ? "name2" : "name1";
+			const avatarKey = index ? "avatar2" : "avatar";
+			const skinKey = index ? "name2" : "name";
+			const canView = () => {
+				if (!player[nameKey]) {
+					return false;
+				}
+				if (!_status.video && !game.observe && (player === game.me || player.isUnderControl(true))) {
+					return true;
+				}
+				return !(_status.video ? player.classList.contains(index ? "unseen2_v" : "unseen_v") : player.isUnseen(index));
+			};
+			if (!canView()) {
+				continue;
+			}
+			if (!viewInfos) {
+				viewInfos = ui.create.div(".text.center");
+				Object.assign(viewInfos.style, { display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "8px 16px" });
+			}
+			const viewInfo = ui.create.div(".pointerdiv", viewInfos);
+			viewInfo.style.position = "relative";
+			viewInfo.style.whiteSpace = "nowrap";
+			viewInfo.innerHTML = index ? "查看副将" : "查看主将";
+			viewInfo.listen(() => {
+				if (canView()) {
+					ui.click.charactercard(player[nameKey], null, null, true, player.node[avatarKey], player.skin[skinKey] || player[nameKey]);
+				}
+			});
+		}
+		if (viewInfos) {
+			result.content.insertBefore(viewInfos, anchor);
+		}
+		oldEntry?.remove();
+		ui.update();
+		return result;
+	}
+
+	translation(str, arg) {
+		if (get.itemtype(str) === "player") {
+			return str.getName();
+		}
+		return baseTranslation.call(this, str, arg);
+	}
+
 	/**
 	 * > ?.?
 	 *

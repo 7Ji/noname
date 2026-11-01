@@ -9,6 +9,30 @@ const hasGouniRelation = (player, target) => {
 };
 
 export class PlayerGuozhan extends lib.element.Player {
+	/** 开局座位（从0开始），不随阵亡、换座或控制权变化重新计算。 */
+	getGuozhanSeat() {
+		if (!Number.isInteger(this.guozhanSeat)) {
+			const match = /^unknown(\d+)$/.exec(this.name);
+			if (match) {
+				this.guozhanSeat = Number(match[1]);
+			}
+		}
+		return this.guozhanSeat;
+	}
+
+	getName(forDialog = false) {
+		const seat = this.getGuozhanSeat();
+		const slots = [this.name1, this.name2].map((name, index) => {
+			const hidden = _status.video ? this.classList.contains(index ? "unseen2_v" : "unseen_v") : this.isUnseen(index);
+			return hidden || !name ? "暗将" : get.translation(name);
+		});
+		const playername = this._tempTranslate || `${Number.isInteger(seat) ? get.seatTranslation(seat) : "未知座位"}(${slots.join("/")})`;
+		if (!forDialog) {
+			return playername;
+		}
+		return `<span style="font-weight:560"><span data-nature=unknown><span style="letter-spacing:0.1em">${playername}</span></span><br/><span style="color:#FFD700">`;
+	}
+
 	/**
 	 * @type {string}
 	 */
@@ -274,6 +298,7 @@ export class PlayerGuozhan extends lib.element.Player {
 	 */
 	getModeState() {
 		return {
+			guozhanSeat: this.getGuozhanSeat(),
 			unseen: this.isUnseen(0),
 			unseen2: this.isUnseen(1),
 		};
@@ -285,6 +310,7 @@ export class PlayerGuozhan extends lib.element.Player {
 	 * @param { object } info
 	 */
 	setModeState(info) {
+		this.guozhanSeat = info.mode.guozhanSeat;
 		if (info.mode.unseen) {
 			this.classList.add("unseen");
 		}
@@ -302,7 +328,8 @@ export class PlayerGuozhan extends lib.element.Player {
 		this.init(info.name1, info.name2, false);
 		this.name1 = info.name1;
 		this.name = info.name;
-		this.node.name_seat = ui.create.div(".name.name_seat", get.verticalStr(lib.translate[this.name].slice(0, 3)), this);
+		const seat = this.getGuozhanSeat();
+		this.node.name_seat = ui.create.div(".name.name_seat", Number.isInteger(seat) ? get.seatTranslation(seat) : "未知座位", this);
 		if (info.identityShown) {
 			this.setIdentity(info.identity);
 			this.node.identity.classList.remove("guessing");
